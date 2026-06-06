@@ -1,0 +1,34 @@
+# 开发环境配置：只放本地默认值和非敏感占位值，真实密钥不要提交到仓库
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/chuamgwei?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+
+  redis:
+    host: ${REDIS_HOST:127.0.0.1}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+
+alipay:
+  app-id: ${ALIPAY_APP_ID:dev-alipay-app-id}
+  private-key: ${ALIPAY_PRIVATE_KEY:dev-alipay-private-key}
+  alipay-public-key: ${ALIPAY_PUBLIC_KEY:dev-alipay-public-key}
+  server-url: ${ALIPAY_SERVER_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  notify-url: ${ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/v1/recharge/callback/alipay}
+
+auth:
+  # 需要与 Node 的 JWT_SECRET 保持一致
+  jwt-secret: ${AUTH_JWT_SECRET:change-me}
+  jwt-expire-minutes: ${AUTH_JWT_EXPIRE_MINUTES:720}
+  ticket-prefix: ${AUTH_TICKET_PREFIX:ticket:}
+
+internal:
+  credit:
+    # 需要与 new-api 的 CHUAMGWEI_CREDIT_INTERNAL_SECRET 保持一致
+    secret: ${INTERNAL_CREDIT_SECRET:change-me}

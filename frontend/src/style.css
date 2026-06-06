@@ -1,0 +1,105 @@
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #303133;
+  background: #f0f2f5;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+}
+
+/* ======== 公共页面容器 ======== */
+.page-container {
+  padding: 0;
+  max-width: 100%;
+}
+
+/* ======== 统一卡片样式 ======== */
+.page-container > .el-card,
+.el-card.page-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid #ebeef5;
+  margin-bottom: 20px;
+  transition: box-shadow 0.3s;
+}
+
+.page-container > .el-card:hover,
+.el-card.page-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.el-card .el-card__header {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2d3d;
+  background: #fafafa;
+  border-radius: 12px 12px 0 0;
+}
+
+.el-card .el-card__body {
+  padding: 20px;
+}
+
+/* ======== 表格微调 ======== */
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  background: #fafafa;
+  color: #606266;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ======== 搜索卡片内的表单 ======== */
+.search-card .el-form {
+  margin-bottom: 0;
+}
+
+.search-card .el-form-item {
+  margin-bottom: 0;
+}
+
+/* ======== 分页 ======== */
+.pagination-wrapper {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ======== 面包屑 ======== */
+.main-breadcrumb .el-breadcrumb {
+  font-size: 13px;
+}
+
+/* ======== 按钮 ======== */
+.el-button--primary {
+  border-radius: 6px;
+}
+
+/* ======== 输入框 ======== */
+.el-input .el-input__wrapper {
+  border-radius: 6px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+/* ======== 描述列表 ======== */
+.el-descriptions {
+  border-radius: 8px;
+  overflow: hidden;
+}
