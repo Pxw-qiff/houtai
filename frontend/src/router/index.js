@@ -70,7 +70,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory('/credit/'),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 

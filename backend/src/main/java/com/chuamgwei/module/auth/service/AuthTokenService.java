@@ -10,6 +10,7 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -38,7 +39,7 @@ public class AuthTokenService {
                 .claim(CLAIM_ADMIN_PERMISSIONS, user.getAdminPermissions())
                 .setIssuedAt(now)
                 .setExpiration(expiresAt)
-                .signWith(SignatureAlgorithm.HS256, authProperties.getJwtSecret())
+                .signWith(SignatureAlgorithm.HS256, getJwtSecretBytes())
                 .compact();
     }
 
@@ -47,7 +48,7 @@ public class AuthTokenService {
      */
     public AuthPrincipal parseToken(String token) {
         Claims claims = Jwts.parser()
-                .setSigningKey(authProperties.getJwtSecret())
+                .setSigningKey(getJwtSecretBytes())
                 .parseClaimsJws(token)
                 .getBody();
 
@@ -75,6 +76,13 @@ public class AuthTokenService {
         principal.setUsername(user.getUsername());
         principal.setAdminPermissions(user.getAdminPermissions());
         return principal;
+    }
+
+    /**
+     * 使用原始字符串密钥字节，保持与 Node jsonwebtoken 的 HS256 签名行为一致
+     */
+    private byte[] getJwtSecretBytes() {
+        return authProperties.getJwtSecret().getBytes(StandardCharsets.UTF_8);
     }
 
 }

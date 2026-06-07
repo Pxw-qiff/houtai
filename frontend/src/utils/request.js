@@ -6,6 +6,16 @@ const request = axios.create({
   timeout: 15000
 })
 
+const redirectToLogin = () => {
+  const base = import.meta.env.BASE_URL || '/'
+  const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const loginPath = `${normalizedBase}/login` || '/login'
+
+  if (window.location.pathname !== loginPath) {
+    window.location.href = loginPath
+  }
+}
+
 // 请求拦截：注入积分系统登录态
 request.interceptors.request.use(
   (config) => {
@@ -32,7 +42,7 @@ request.interceptors.response.use(
     if (res.code === 401) {
       ElMessage.error('登录已过期，请重新登录')
       window.localStorage.removeItem('chuamgwei_token')
-      window.location.href = '/login'
+      redirectToLogin()
       return Promise.reject(new Error('未授权'))
     }
 
@@ -44,7 +54,7 @@ request.interceptors.response.use(
     if (error.response?.status === 401) {
       ElMessage.error('登录已过期，请重新登录')
       window.localStorage.removeItem('chuamgwei_token')
-      window.location.href = '/login'
+      redirectToLogin()
       return Promise.reject(error)
     }
 

@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -132,13 +132,6 @@ const handleLogin = async () => {
   }
 }
 
-// 检查是否已登录
-onMounted(() => {
-  const token = localStorage.getItem('chuamgwei_token')
-  if (token) {
-    router.push('/credit/balance')
-  }
-})
 </script>
 
 <style scoped>
