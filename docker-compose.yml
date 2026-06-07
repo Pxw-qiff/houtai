@@ -101,6 +101,8 @@ services:
   frontend:
     build:
       context: "https://github.com/Pxw-qiff/houtai.git#main:frontend"
+      args:
+        VITE_NEW_API_WEB_URL: ${VITE_NEW_API_WEB_URL:-http://localhost:3000}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-5174}:80"
