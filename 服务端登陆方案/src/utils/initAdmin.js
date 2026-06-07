@@ -3,7 +3,6 @@
  */
 
 const bcrypt = require("bcryptjs");
-const { v4: uuidv4 } = require("uuid");
 const { getPool } = require("../config/database");
 
 const DEFAULT_ADMIN = {
@@ -12,6 +11,8 @@ const DEFAULT_ADMIN = {
   password: "admin123",
   email: "admin@example.com",
   phone: "",
+  user_permission_level: 10,
+  admin_permissions: 3,
   max_machine_count: 5,
 };
 
@@ -29,8 +30,22 @@ async function initDefaultAdmin() {
     );
 
     if (users.length > 0) {
+      await connection.execute(
+        `UPDATE users
+         SET user_permission_level = GREATEST(COALESCE(user_permission_level, 1), ?),
+             admin_permissions = GREATEST(COALESCE(admin_permissions, 1), ?),
+             is_banned = 0,
+             is_deleted = 0,
+             updated_at = NOW()
+         WHERE username = ?`,
+        [
+          DEFAULT_ADMIN.user_permission_level,
+          DEFAULT_ADMIN.admin_permissions,
+          DEFAULT_ADMIN.username,
+        ],
+      );
       console.log(
-        `[init] 管理员账户 '${DEFAULT_ADMIN.username}' 已存在，跳过初始化`,
+        `[init] 管理员账户 '${DEFAULT_ADMIN.username}' 已存在，已确认管理员权限`,
       );
       return;
     }
@@ -41,15 +56,18 @@ async function initDefaultAdmin() {
     await connection.execute(
       `INSERT INTO users (
         user_uuid, username, password, email, phone,
+        user_permission_level, admin_permissions,
         is_banned, is_deleted, machine_code, max_machine_count,
         trial_duration_hours, trial_expiry_time, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 0, 0, '', ?, 0, NULL, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, '', ?, 0, NULL, NOW(), NOW())`,
       [
         DEFAULT_ADMIN.user_uuid,
         DEFAULT_ADMIN.username,
         hashedPassword,
         DEFAULT_ADMIN.email,
         DEFAULT_ADMIN.phone,
+        DEFAULT_ADMIN.user_permission_level,
+        DEFAULT_ADMIN.admin_permissions,
         DEFAULT_ADMIN.max_machine_count,
       ],
     );
