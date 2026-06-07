@@ -41,6 +41,8 @@ public class AuthInterceptor implements HandlerInterceptor {
             log.debug("请求进入: {} {}, operator={}", request.getMethod(), request.getRequestURI(), principal.getUsername());
             return true;
         } catch (Exception e) {
+            log.warn("身份令牌解析失败: method={}, uri={}, reason={}",
+                    request.getMethod(), request.getRequestURI(), e.getMessage());
             throw new AuthException("访问令牌无效或已过期");
         }
     }
