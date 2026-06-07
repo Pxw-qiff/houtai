@@ -6,6 +6,7 @@ const { getPool } = require('../config/database');
 const { handleApiError } = require('../middleware/error');
 const { SUCCESS_MESSAGES } = require('../config/constants');
 const { syncUserToNewApi, syncUsersToNewApi, syncUserSnapshotToNewApi } = require('../services/newApiSyncService');
+const { ensureCreditAccount } = require('../utils/creditAccount');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs'); // Assuming bcryptjs is used, or maybe regular bcrypt. Checking package.json would be better but I'll stick to common practice or check userController.
 const DEFAULT_TRIAL_DURATION_HOURS = 24; // Copying constant, or import if available
@@ -601,6 +602,8 @@ const createUser = async (req, res) => {
           [isBanned, passwordHash, expireTime, existingUser.user_uuid]
         );
 
+        await ensureCreditAccount(connection, existingUser.user_uuid);
+
         const newApiSync = await syncUserToNewApi({
           user_uuid: existingUser.user_uuid,
           username: existingUser.username,
@@ -652,6 +655,7 @@ const createUser = async (req, res) => {
             created_by || null
           ]
         );
+        await ensureCreditAccount(connection, userUuid);
       } catch (insertError) {
         if (insertError.code === 'ER_DUP_ENTRY') {
           return res.status(400).json({

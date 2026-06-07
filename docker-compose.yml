@@ -24,6 +24,26 @@ services:
       timeout: 5s
       retries: 10
 
+  mysql-new-api-init:
+    image: mysql:8.4
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me}
+      MYSQL_USER: ${MYSQL_USER:-chuamgwei}
+      NEW_API_DATABASE: ${NEW_API_DATABASE:-new_api}
+    command:
+      - sh
+      - -c
+      - |
+        mysql -hmysql -uroot -p"$$MYSQL_ROOT_PASSWORD" <<-EOSQL
+        CREATE DATABASE IF NOT EXISTS \`$${NEW_API_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        GRANT ALL PRIVILEGES ON \`$${NEW_API_DATABASE}\`.* TO '$${MYSQL_USER}'@'%';
+        FLUSH PRIVILEGES;
+        EOSQL
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -137,8 +157,8 @@ services:
       - new_api_data:/data
       - ./logs/new-api:/app/logs
     depends_on:
-      mysql:
-        condition: service_healthy
+      mysql-new-api-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       backend:

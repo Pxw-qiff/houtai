@@ -4,6 +4,7 @@
 
 const bcrypt = require("bcryptjs");
 const { getPool } = require("../config/database");
+const { ensureCreditAccount } = require("./creditAccount");
 
 const DEFAULT_ADMIN = {
   user_uuid: "00000000-0000-0000-0000-000000000001",
@@ -44,6 +45,7 @@ async function initDefaultAdmin() {
           DEFAULT_ADMIN.username,
         ],
       );
+      await ensureCreditAccount(connection, users[0].user_uuid);
       console.log(
         `[init] 管理员账户 '${DEFAULT_ADMIN.username}' 已存在，已确认管理员权限`,
       );
@@ -71,6 +73,8 @@ async function initDefaultAdmin() {
         DEFAULT_ADMIN.max_machine_count,
       ],
     );
+
+    await ensureCreditAccount(connection, DEFAULT_ADMIN.user_uuid);
 
     console.log(
       `[init] 成功创建默认管理员账户 '${DEFAULT_ADMIN.username}' / '${DEFAULT_ADMIN.password}'`,

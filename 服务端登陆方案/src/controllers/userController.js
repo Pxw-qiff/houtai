@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require("uuid");
 const { getPool } = require("../config/database");
 const { handleApiError } = require("../middleware/error");
 const { syncUserToNewApi } = require("../services/newApiSyncService");
+const { ensureCreditAccount } = require("../utils/creditAccount");
 const {
   JWT_CONFIG,
   ERROR_MESSAGES,
@@ -233,6 +234,8 @@ const register = async (req, res) => {
           [passwordHash, trialEndTime, existingUser.user_uuid],
         );
 
+        await ensureCreditAccount(connection, existingUser.user_uuid);
+
         const newApiSync = await syncUserToNewApi({
           user_uuid: existingUser.user_uuid,
           username: existingUser.username,
@@ -280,6 +283,7 @@ const register = async (req, res) => {
             trialEndTime,
           ],
         );
+        await ensureCreditAccount(connection, userUuid);
       } catch (insertError) {
         if (insertError.code === "ER_DUP_ENTRY") {
           return res.status(400).json({

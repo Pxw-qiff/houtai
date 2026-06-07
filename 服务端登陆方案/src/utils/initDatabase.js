@@ -4,6 +4,7 @@
  */
 
 const { getPool } = require('../config/database');
+const { backfillCreditAccounts } = require('./creditAccount');
 
 /**
  * 创建 users 表的 SQL
@@ -360,6 +361,14 @@ async function initDatabaseSchema() {
     
     // 4. 初始化系统配置默认数据
     await initSystemConfig(connection);
+
+    // 5. 给历史有效用户补齐积分账户
+    const backfilledCount = await backfillCreditAccounts(connection);
+    if (backfilledCount > 0) {
+      console.log(`[db-init] 已补齐 ${backfilledCount} 个历史用户积分账户`);
+    } else {
+      console.log('[db-init] 历史用户积分账户完整，无需补齐');
+    }
     
     console.log('[db-init] 数据库表结构初始化完成');
   } catch (error) {
