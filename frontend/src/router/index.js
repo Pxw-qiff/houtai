@@ -52,6 +52,12 @@ const routes = [
         name: 'TaskManage',
         component: () => import('../views/task/Tasks.vue'),
         meta: { title: '任务管理' }
+      },
+      {
+        path: 'gateway/console',
+        name: 'GatewayConsole',
+        component: () => import('../views/gateway/NewApiConsole.vue'),
+        meta: { title: 'AI 网关控制台' }
       }
     ]
   }

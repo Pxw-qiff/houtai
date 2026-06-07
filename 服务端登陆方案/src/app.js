@@ -30,16 +30,21 @@ const serverStartTime = Date.now();
 
 // ==================== 基础中间件配置 ====================
 
-// IP 白名单限制（只允许 Nginx 和本地访问）
-// 【修改说明 - 2026-02-24】
-// 修改背景：Nginx 通过 Docker 内网转发请求，来源 IP 为 172.17.0.x，被白名单拦截导致 403
-// 解决问题：增加 Docker 内网网段 172.17.x.x 到白名单
+// IP 白名单限制（只允许本地和 Docker/Nginx 内网访问）
 const allowedIPs = ['127.0.0.1', '::1', 'localhost']
+
+/**
+ * 判断请求来源是否来自容器私有网络
+ */
+const isPrivateNetworkIP = (ip) => {
+  return /^10\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+}
+
 app.use((req, res, next) => {
   const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress
+  const normalizedIP = clientIP.replace(/^::ffff:/, '')
 
-  // 允许本地和 Docker 内网（172.17.x.x）访问
-  const isAllowed = allowedIPs.includes(clientIP) || clientIP.startsWith('172.17.')
+  const isAllowed = allowedIPs.includes(clientIP) || allowedIPs.includes(normalizedIP) || isPrivateNetworkIP(normalizedIP)
 
   if (!isAllowed) {
     console.warn(`[安全] 拒绝来自 ${clientIP} 的请求`)

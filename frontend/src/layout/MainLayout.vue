@@ -55,6 +55,10 @@
               <span class="menu-icon">◆</span>
               <span>任务管理</span>
             </el-menu-item>
+            <el-menu-item index="/gateway/console">
+              <span class="menu-icon">◆</span>
+              <span>AI 网关控制台</span>
+            </el-menu-item>
           </el-menu>
         </el-scrollbar>
       </el-aside>
@@ -99,7 +103,8 @@ const parentMenu = computed(() => {
   const menuMap = {
     credit: '积分管理',
     recharge: '充值管理',
-    task: '任务管理'
+    task: '任务管理',
+    gateway: 'AI 网关'
   }
   const seg = route.path.split('/')[1]
   return menuMap[seg] || ''

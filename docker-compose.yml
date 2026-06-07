@@ -1,0 +1,148 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-chuamgwei_gateway}
+      MYSQL_USER: ${MYSQL_USER:-chuamgwei}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --log-error=/var/lib/mysql/logs/error.log
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./logs/mysql:/var/lib/mysql/logs
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command: sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --logfile /logs/redis.log; else redis-server --appendonly yes --logfile /logs/redis.log; fi'
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./logs/redis:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  node-login:
+    build:
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:服务端登陆方案/src"
+    restart: unless-stopped
+    environment:
+      PORT: 3100
+      HOST: 0.0.0.0
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER:-chuamgwei}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      DB_NAME: ${MYSQL_DATABASE:-chuamgwei_gateway}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      API_PREFIX: /ai-anime/user
+      NEW_API_BASE_URL: ${NEW_API_BASE_URL:-}
+      NEW_API_INTERNAL_SECRET: ${NEW_API_INTERNAL_SECRET:-}
+      NEW_API_SYNC_TIMEOUT_MS: ${NEW_API_SYNC_TIMEOUT_MS:-5000}
+    command: sh -c "npm start 2>&1 | tee -a /app/logs/node-login.log"
+    ports:
+      - "${NODE_LOGIN_PORT:-3100}:3100"
+    volumes:
+      - ./logs/node-login:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:backend"
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      MYSQL_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-chuamgwei_gateway}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      MYSQL_USERNAME: ${MYSQL_USER:-chuamgwei}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      AUTH_JWT_SECRET: ${JWT_SECRET:-change-me}
+      INTERNAL_CREDIT_SECRET: ${INTERNAL_CREDIT_SECRET:-change-me}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_SERVER_URL: ${ALIPAY_SERVER_URL:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      ALIPAY_NOTIFY_URL: ${ALIPAY_NOTIFY_URL:-http://127.0.0.1:8080/v1/recharge/callback/alipay}
+    entrypoint: ["/bin/sh", "-c", "java -jar /app/app.jar 2>&1 | tee -a /app/logs/backend.log"]
+    ports:
+      - "${JAVA_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./logs/backend:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:frontend"
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5174}:80"
+    volumes:
+      - ./logs/frontend:/var/log/nginx
+    depends_on:
+      - backend
+      - node-login
+
+  new-api:
+    build:
+      context: "https://github.com/Pxw-qiff/new-api.git"
+    restart: unless-stopped
+    command: --log-dir /app/logs
+    environment:
+      PORT: 3000
+      SQL_DSN: "${MYSQL_USER:-chuamgwei}:${MYSQL_PASSWORD:-change-me}@tcp(mysql:3306)/${MYSQL_DATABASE:-chuamgwei_gateway}?parseTime=true"
+      REDIS_CONN_STRING: "redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1"
+      TZ: Asia/Shanghai
+      SESSION_SECRET: ${NEW_API_SESSION_SECRET:-change-me}
+      CHUAMGWEI_CREDIT_ENABLED: ${CHUAMGWEI_CREDIT_ENABLED:-true}
+      CHUAMGWEI_CREDIT_BASE_URL: http://backend:8080
+      CHUAMGWEI_CREDIT_INTERNAL_SECRET: ${INTERNAL_CREDIT_SECRET:-change-me}
+      CHUAMGWEI_CREDIT_TIMEOUT_MS: ${CHUAMGWEI_CREDIT_TIMEOUT_MS:-5000}
+      CHUAMGWEI_USER_SYNC_SECRET: ${NEW_API_INTERNAL_SECRET:-change-me}
+      CHUAMGWEI_DEFAULT_TOKEN_GROUP: default
+      CHUAMGWEI_DEFAULT_TOKEN_UNLIMITED: "true"
+      CHUAMGWEI_DEFAULT_TOKEN_REMAIN_QUOTA: "0"
+    ports:
+      - "${NEW_API_PORT:-3000}:3000"
+    volumes:
+      - new_api_data:/data
+      - ./logs/new-api:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+volumes:
+  mysql_data:
+  redis_data:
+  new_api_data:
