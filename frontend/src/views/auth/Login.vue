@@ -101,7 +101,7 @@ const handleLogin = async () => {
   try {
     const machineCode = generateMachineCode()
 
-    const response = await axios.post('/ai-anime/user/login', {
+    const response = await axios.post('/ai-anime/user/login/login', {
       loginField: loginForm.value.username,
       password: loginForm.value.password,
       loginMode: 'username',
