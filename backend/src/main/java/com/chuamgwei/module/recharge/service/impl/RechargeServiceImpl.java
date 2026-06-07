@@ -84,7 +84,7 @@ public class RechargeServiceImpl implements RechargeService {
         if (userUuid == null || userUuid.trim().isEmpty()) {
             throw new RuntimeException("用户身份不能为空");
         }
-        User user = userMapper.selectById(userUuid);
+        User user = userMapper.selectAuthUserByUuid(userUuid);
         if (user == null) {
             throw new RuntimeException("用户不存在: " + userUuid);
         }

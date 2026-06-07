@@ -96,7 +96,7 @@ public class TaskServiceImpl implements TaskService {
      * 校验用户是否可以提交任务
      */
     private void checkUserValid(String userUuid) {
-        User user = userMapper.selectById(userUuid);
+        User user = userMapper.selectAuthUserByUuid(userUuid);
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }

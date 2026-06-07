@@ -60,7 +60,7 @@ public class AuthController {
             throw new RuntimeException("ticket缺少用户标识");
         }
 
-        User user = userMapper.selectById(userUuid);
+        User user = userMapper.selectAuthUserByUuid(userUuid);
         ensureUserAvailable(user);
 
         String token = authTokenService.createToken(user);

@@ -71,7 +71,7 @@ public class AuthTokenService {
             throw new RuntimeException("访问令牌缺少用户UUID");
         }
 
-        User user = userMapper.selectById(userUuid);
+        User user = userMapper.selectAuthUserByUuid(userUuid);
         if (user == null) {
             log.warn("访问令牌校验失败: reason=user_not_found, tokenFingerprint={}, userUuid={}",
                     tokenFingerprint, userUuid);
