@@ -9,6 +9,7 @@ require('dotenv').config();
 // 导入配置
 const { API_PREFIXES, SERVER_CONFIG } = require('./config/constants');
 const { createPool, testConnection, closePool, getPool } = require('./config/database');
+const { initDefaultAdmin } = require('./utils/initAdmin');
 
 // 导入中间件
 const { requestLogger, notFoundHandler, globalErrorHandler } = require('./middleware/error');
@@ -132,6 +133,13 @@ async function startServer() {
     const dbConnected = await testConnection();
     if (!dbConnected) {
       console.error('❌ 数据库连接失败，服务器将无法正常工作');
+    } else {
+      // 数据库连接成功后，初始化默认管理员账户
+      try {
+        await initDefaultAdmin();
+      } catch (error) {
+        console.warn('[启动] 初始化管理员账户时出错（非致命）:', error.message);
+      }
     }
 
     // 启动HTTP服务器
