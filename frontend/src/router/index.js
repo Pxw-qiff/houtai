@@ -3,6 +3,12 @@ import request from '../utils/request.js'
 
 const routes = [
   {
+    path: '/login',
+    name: 'Login',
+    component: () => import('../views/auth/Login.vue'),
+    meta: { title: '用户登录', requiresAuth: false }
+  },
+  {
     path: '/pay-test',
     redirect: '/recharge/pay-test'
   },
@@ -69,23 +75,41 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  const ticket = to.query.ticket
-  if (!ticket) {
+  // 登录页不需要鉴权
+  if (to.path === '/login') {
     return true
   }
 
-  const auth = await request.post('/v1/auth/ticket', { ticket })
-  window.localStorage.setItem('chuamgwei_token', auth.token)
-  window.localStorage.setItem('chuamgwei_user_uuid', auth.userUuid)
-  window.localStorage.setItem('chuamgwei_username', auth.username || '')
+  // 检查是否有登录态
+  const token = window.localStorage.getItem('chuamgwei_token')
+  if (!token) {
+    // 如果有 ticket，尝试用 ticket 换 token
+    const ticket = to.query.ticket
+    if (ticket) {
+      try {
+        const auth = await request.post('/v1/auth/ticket', { ticket })
+        window.localStorage.setItem('chuamgwei_token', auth.token)
+        window.localStorage.setItem('chuamgwei_user_uuid', auth.userUuid)
+        window.localStorage.setItem('chuamgwei_username', auth.username || '')
 
-  const query = { ...to.query }
-  delete query.ticket
-  return {
-    path: to.path,
-    query,
-    replace: true
+        const query = { ...to.query }
+        delete query.ticket
+        return {
+          path: to.path,
+          query,
+          replace: true
+        }
+      } catch (error) {
+        console.error('ticket 换取 token 失败:', error)
+        return { path: '/login', query: { redirect: to.fullPath } }
+      }
+    }
+
+    // 没有 token 也没有 ticket，跳转登录页
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
+
+  return true
 })
 
 export default router

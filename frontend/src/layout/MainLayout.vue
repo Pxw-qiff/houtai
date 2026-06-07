@@ -70,8 +70,15 @@
             <span class="collapse-icon">{{ isCollapse ? '☰' : '✕' }}</span>
           </div>
           <div class="header-right">
-            <span class="header-avatar">管</span>
-            <span class="header-name">管理员</span>
+            <span class="header-avatar">{{ userInitial }}</span>
+            <el-dropdown @command="handleCommand">
+              <span class="header-name">{{ username }}</span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </el-header>
 
@@ -91,13 +98,24 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 
 const route = useRoute()
+const router = useRouter()
 const isCollapse = ref(false)
 
 const activeMenu = computed(() => route.path)
 const defaultOpeneds = ['credit', 'recharge']
+
+const username = computed(() => {
+  return window.localStorage.getItem('chuamgwei_username') || '用户'
+})
+
+const userInitial = computed(() => {
+  const name = username.value
+  return name ? name.charAt(0).toUpperCase() : 'U'
+})
 
 const parentMenu = computed(() => {
   const menuMap = {
@@ -114,6 +132,28 @@ const pageTitle = computed(() => route.meta?.title || '')
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
+}
+
+const handleCommand = async (command) => {
+  if (command === 'logout') {
+    try {
+      await ElMessageBox.confirm('确定退出登录吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+
+      // 清除登录态
+      window.localStorage.removeItem('chuamgwei_token')
+      window.localStorage.removeItem('chuamgwei_user_uuid')
+      window.localStorage.removeItem('chuamgwei_username')
+
+      // 跳转登录页
+      router.push('/login')
+    } catch {
+      // 用户取消
+    }
+  }
 }
 </script>
 
@@ -218,6 +258,11 @@ const toggleCollapse = () => {
 .header-name {
   color: #333;
   font-size: 14px;
+  cursor: pointer;
+}
+
+.header-name:hover {
+  color: #409eff;
 }
 
 /* ======== 主内容区 ======== */
