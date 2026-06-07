@@ -1,6 +1,5 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import router from '@/router'
 
 const request = axios.create({
   baseURL: '/api',
@@ -33,7 +32,7 @@ request.interceptors.response.use(
     if (res.code === 401) {
       ElMessage.error('登录已过期，请重新登录')
       window.localStorage.removeItem('chuamgwei_token')
-      router.push('/login')
+      window.location.href = '/login'
       return Promise.reject(new Error('未授权'))
     }
 
@@ -45,7 +44,7 @@ request.interceptors.response.use(
     if (error.response?.status === 401) {
       ElMessage.error('登录已过期，请重新登录')
       window.localStorage.removeItem('chuamgwei_token')
-      router.push('/login')
+      window.location.href = '/login'
       return Promise.reject(error)
     }
 
