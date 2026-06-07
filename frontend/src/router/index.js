@@ -112,4 +112,21 @@ router.beforeEach(async (to) => {
   return true
 })
 
+router.onError((error) => {
+  const message = error?.message || ''
+  const isDynamicImportError = message.includes('Failed to fetch dynamically imported module')
+    || message.includes('Importing a module script failed')
+
+  if (!isDynamicImportError) return
+
+  const reloadKey = 'chuamgwei_dynamic_import_reload'
+  if (window.sessionStorage.getItem(reloadKey) === '1') {
+    window.sessionStorage.removeItem(reloadKey)
+    return
+  }
+
+  window.sessionStorage.setItem(reloadKey, '1')
+  window.location.reload()
+})
+
 export default router
