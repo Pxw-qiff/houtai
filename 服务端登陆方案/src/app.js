@@ -9,6 +9,7 @@ require('dotenv').config();
 // 导入配置
 const { API_PREFIXES, SERVER_CONFIG } = require('./config/constants');
 const { createPool, testConnection, closePool, getPool } = require('./config/database');
+const { initDatabaseSchema } = require('./utils/initDatabase');
 const { initDefaultAdmin } = require('./utils/initAdmin');
 
 // 导入中间件
@@ -134,7 +135,15 @@ async function startServer() {
     if (!dbConnected) {
       console.error('❌ 数据库连接失败，服务器将无法正常工作');
     } else {
-      // 数据库连接成功后，初始化默认管理员账户
+      // 数据库连接成功后，先初始化表结构
+      try {
+        await initDatabaseSchema();
+      } catch (error) {
+        console.error('[启动] 数据库表结构初始化失败:', error.message);
+        throw error; // 表结构初始化失败应中止启动
+      }
+
+      // 表结构就绪后，初始化默认管理员账户
       try {
         await initDefaultAdmin();
       } catch (error) {

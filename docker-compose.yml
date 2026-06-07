@@ -12,12 +12,12 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
-      - --log-error=/var/lib/mysql/logs/error.log
+      - --log-error=/var/log/mysql/error.log
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./logs/mysql:/var/lib/mysql/logs
+      - ./logs/mysql:/var/log/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
@@ -117,7 +117,7 @@ services:
     command: --log-dir /app/logs
     environment:
       PORT: 3000
-      SQL_DSN: "${MYSQL_USER:-chuamgwei}:${MYSQL_PASSWORD:-change-me}@tcp(mysql:3306)/${MYSQL_DATABASE:-chuamgwei_gateway}?parseTime=true"
+      SQL_DSN: "${MYSQL_USER:-chuamgwei}:${MYSQL_PASSWORD:-change-me}@tcp(mysql:3306)/${NEW_API_DATABASE:-new_api}?parseTime=true"
       REDIS_CONN_STRING: "redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1"
       TZ: Asia/Shanghai
       SESSION_SECRET: ${NEW_API_SESSION_SECRET:-change-me}
