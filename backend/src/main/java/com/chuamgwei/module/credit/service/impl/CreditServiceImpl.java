@@ -82,20 +82,17 @@ public class CreditServiceImpl implements CreditService {
     @Override
     public CreditAccount getBalance(String userUuid) {
         // 先查 Redis 缓存
-        BigDecimal cachedBalance = creditBalanceCacheService.getCachedBalance(userUuid);
-        if (cachedBalance != null) {
-            CreditAccount cached = new CreditAccount();
-            cached.setUserUuid(userUuid);
-            cached.setAvailablePoints(cachedBalance);
-            log.debug("命中余额缓存: userUuid={}, availablePoints={}", userUuid, cachedBalance);
-            return cached;
+        CreditAccount cachedAccount = creditBalanceCacheService.getCachedAccount(userUuid);
+        if (cachedAccount != null) {
+            log.debug("命中积分账户缓存: userUuid={}, availablePoints={}", userUuid, cachedAccount.getAvailablePoints());
+            return cachedAccount;
         }
 
         // 未命中，查 MySQL
         CreditAccount account = getOrCreateAccount(userUuid);
         
         // 写入 Redis 缓存
-        creditBalanceCacheService.cacheBalance(userUuid, account.getAvailablePoints());
+        creditBalanceCacheService.cacheAccount(userUuid, account);
         
         return account;
     }

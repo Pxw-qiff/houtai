@@ -1,21 +1,21 @@
 package com.chuamgwei.module.redis.service;
 
-import java.math.BigDecimal;
+import com.chuamgwei.module.credit.entity.CreditAccount;
 
 /**
- * 积分余额缓存服务
+ * 积分账户缓存服务
  */
 public interface CreditBalanceCacheService {
 
     /**
-     * 获取缓存的可用余额
+     * 获取缓存的积分账户
      */
-    BigDecimal getCachedBalance(String userUuid);
+    CreditAccount getCachedAccount(String userUuid);
 
     /**
-     * 缓存用户可用余额（带随机过期防雪崩）
+     * 缓存积分账户（带随机过期防雪崩）
      */
-    void cacheBalance(String userUuid, BigDecimal availablePoints);
+    void cacheAccount(String userUuid, CreditAccount account);
 
     /**
      * 删除用户余额缓存（余额变动时调用）

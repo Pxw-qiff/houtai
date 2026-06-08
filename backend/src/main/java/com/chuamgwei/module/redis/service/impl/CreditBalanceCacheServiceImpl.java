@@ -1,17 +1,19 @@
 package com.chuamgwei.module.redis.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.chuamgwei.module.credit.entity.CreditAccount;
 import com.chuamgwei.module.redis.service.CreditBalanceCacheService;
 import com.chuamgwei.module.redis.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 积分余额缓存实现
+ * 积分账户缓存实现
  */
 @Slf4j
 @Service
@@ -23,34 +25,39 @@ public class CreditBalanceCacheServiceImpl implements CreditBalanceCacheService 
     private static final long RANDOM_TTL_SECONDS = 60L; // 0-60 秒随机，防雪崩
 
     private final RedisService redisService;
+    private final ObjectMapper objectMapper;
 
     @Override
-    public BigDecimal getCachedBalance(String userUuid) {
+    public CreditAccount getCachedAccount(String userUuid) {
         String key = buildKey(userUuid);
         String cached = redisService.get(key);
         if (cached == null || cached.trim().isEmpty()) {
             return null;
         }
         try {
-            return new BigDecimal(cached);
-        } catch (NumberFormatException e) {
-            log.warn("余额缓存格式错误: userUuid={}, cached={}", userUuid, cached);
+            return objectMapper.readValue(cached, CreditAccount.class);
+        } catch (JsonProcessingException e) {
+            log.warn("积分账户缓存格式错误，已删除缓存: userUuid={}, reason={}", userUuid, e.getMessage());
             redisService.delete(key);
             return null;
         }
     }
 
     @Override
-    public void cacheBalance(String userUuid, BigDecimal availablePoints) {
-        if (availablePoints == null) {
+    public void cacheAccount(String userUuid, CreditAccount account) {
+        if (account == null) {
             return;
         }
         String key = buildKey(userUuid);
-        long randomSeconds = ThreadLocalRandom.current().nextLong(0, RANDOM_TTL_SECONDS);
-        Duration ttl = Duration.ofSeconds(BASE_TTL_SECONDS + randomSeconds);
-        redisService.set(key, availablePoints.toPlainString(), ttl);
-        log.debug("缓存用户余额: userUuid={}, availablePoints={}, ttl={}s", 
-                userUuid, availablePoints, BASE_TTL_SECONDS + randomSeconds);
+        try {
+            long randomSeconds = ThreadLocalRandom.current().nextLong(0, RANDOM_TTL_SECONDS);
+            Duration ttl = Duration.ofSeconds(BASE_TTL_SECONDS + randomSeconds);
+            redisService.set(key, objectMapper.writeValueAsString(account), ttl);
+            log.debug("缓存积分账户: userUuid={}, availablePoints={}, ttl={}s",
+                    userUuid, account.getAvailablePoints(), BASE_TTL_SECONDS + randomSeconds);
+        } catch (JsonProcessingException e) {
+            log.warn("积分账户缓存序列化失败: userUuid={}, reason={}", userUuid, e.getMessage());
+        }
     }
 
     @Override
