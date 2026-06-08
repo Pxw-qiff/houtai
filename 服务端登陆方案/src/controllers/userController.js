@@ -146,6 +146,36 @@ const login = async (req, res) => {
         [user.user_uuid],
       );
 
+      const newApiSyncResult = await syncUserToNewApi({
+        user_uuid: user.user_uuid,
+        username: user.username,
+        is_banned: 0,
+        is_deleted: 0,
+      });
+      const newApiSync = {
+        success: newApiSyncResult.success === true,
+      };
+      let newApiKey = null;
+
+      if (newApiSyncResult.skipped) {
+        newApiSync.skipped = true;
+      }
+      if (newApiSyncResult.error) {
+        newApiSync.error = newApiSyncResult.error;
+      }
+      if (newApiSyncResult.success && newApiSyncResult.data) {
+        newApiKey = newApiSyncResult.data.key || null;
+        newApiSync.userId = newApiSyncResult.data.userId;
+        newApiSync.tokenId = newApiSyncResult.data.tokenId;
+        newApiSync.tokenName = newApiSyncResult.data.tokenName;
+        newApiSync.maskedKey = newApiSyncResult.data.maskedKey;
+        newApiSync.tokenCreated = newApiSyncResult.data.tokenCreated;
+      } else if (!newApiSyncResult.skipped) {
+        console.error("[new-api同步失败] 用户登录后同步失败", {
+          userUuid: user.user_uuid,
+          error: newApiSyncResult.error,
+        });
+      }
 
       // 返回完整的用户信息（与旧版一致）
       res.json({
@@ -153,6 +183,8 @@ const login = async (req, res) => {
         message: SUCCESS_MESSAGES.LOGIN_SUCCESS,
         data: {
           token,
+          newApiKey,
+          newApiSync,
           user: {
             user_uuid: user.user_uuid,
             username: user.username,
