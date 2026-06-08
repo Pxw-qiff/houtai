@@ -134,12 +134,12 @@ const CREATE_CREDIT_ACCOUNT_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS credit_account (
   id BIGINT NOT NULL AUTO_INCREMENT,
   user_uuid VARCHAR(36) NOT NULL COMMENT '用户UUID',
-  total_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '总积分',
-  available_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '可用积分',
-  frozen_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '冻结积分',
-  total_recharge_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '累计充值积分',
-  total_consume_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '累计消费积分',
-  total_refund_points DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '累计退款积分',
+  total_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '总积分',
+  available_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '可用积分',
+  frozen_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '冻结积分',
+  total_recharge_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计充值积分',
+  total_consume_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计消费积分',
+  total_refund_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计退款积分',
   status INT NOT NULL DEFAULT 1 COMMENT '账户状态：1-正常，2-冻结',
   version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -159,12 +159,12 @@ CREATE TABLE IF NOT EXISTS credit_flow (
   flow_no VARCHAR(64) NOT NULL COMMENT '唯一流水号',
   user_uuid VARCHAR(36) NOT NULL COMMENT '用户UUID',
   account_id BIGINT NOT NULL COMMENT '积分账户ID',
-  before_available_points DECIMAL(20, 2) NOT NULL COMMENT '变动前可用积分',
-  change_available_points DECIMAL(20, 2) NOT NULL COMMENT '可用积分变动量',
-  after_available_points DECIMAL(20, 2) NOT NULL COMMENT '变动后可用积分',
-  before_frozen_points DECIMAL(20, 2) NOT NULL COMMENT '变动前冻结积分',
-  change_frozen_points DECIMAL(20, 2) NOT NULL COMMENT '冻结积分变动量',
-  after_frozen_points DECIMAL(20, 2) NOT NULL COMMENT '变动后冻结积分',
+  before_available_points DECIMAL(20, 6) NOT NULL COMMENT '变动前可用积分',
+  change_available_points DECIMAL(20, 6) NOT NULL COMMENT '可用积分变动量',
+  after_available_points DECIMAL(20, 6) NOT NULL COMMENT '变动后可用积分',
+  before_frozen_points DECIMAL(20, 6) NOT NULL COMMENT '变动前冻结积分',
+  change_frozen_points DECIMAL(20, 6) NOT NULL COMMENT '冻结积分变动量',
+  after_frozen_points DECIMAL(20, 6) NOT NULL COMMENT '变动后冻结积分',
   biz_type VARCHAR(32) NOT NULL COMMENT '业务类型',
   biz_order_no VARCHAR(64) DEFAULT NULL COMMENT '关联业务单号',
   operator_uuid VARCHAR(36) DEFAULT NULL COMMENT '操作人UUID',
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS recharge_orders (
   trade_no VARCHAR(128) DEFAULT NULL COMMENT '第三方支付平台交易流水号',
   user_uuid VARCHAR(36) NOT NULL COMMENT '用户UUID',
   amount DECIMAL(10, 2) NOT NULL COMMENT '充值金额（元）',
-  points DECIMAL(20, 2) NOT NULL COMMENT '到账积分',
+  points DECIMAL(20, 6) NOT NULL COMMENT '到账积分',
   charge_ratio DECIMAL(10, 2) NOT NULL COMMENT '充值比例',
   pay_type VARCHAR(16) NOT NULL COMMENT '支付方式',
   status VARCHAR(16) NOT NULL COMMENT '订单状态',
@@ -220,7 +220,7 @@ CREATE TABLE IF NOT EXISTS sys_task (
   platform VARCHAR(32) NOT NULL COMMENT '平台类型',
   action VARCHAR(32) NOT NULL COMMENT '任务动作',
   status VARCHAR(16) NOT NULL COMMENT '任务状态',
-  quota DECIMAL(20, 2) NOT NULL DEFAULT 0.00 COMMENT '预扣积分',
+  quota DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '预扣积分',
   result_url TEXT COMMENT '生成结果URL',
   fail_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
   created_at BIGINT NOT NULL COMMENT '创建时间戳',
@@ -292,6 +292,83 @@ CREATE TABLE IF NOT EXISTS balance_flow (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户积分变动流水表（后续将迁移到credit_flow）';
 `;
 
+const POINT_DECIMAL_COLUMNS = [
+  {
+    table: 'credit_account',
+    columns: [
+      { name: 'total_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '总积分'" },
+      { name: 'available_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '可用积分'" },
+      { name: 'frozen_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '冻结积分'" },
+      { name: 'total_recharge_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计充值积分'" },
+      { name: 'total_consume_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计消费积分'" },
+      { name: 'total_refund_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '累计退款积分'" }
+    ]
+  },
+  {
+    table: 'credit_flow',
+    columns: [
+      { name: 'before_available_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '变动前可用积分'" },
+      { name: 'change_available_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '可用积分变动量'" },
+      { name: 'after_available_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '变动后可用积分'" },
+      { name: 'before_frozen_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '变动前冻结积分'" },
+      { name: 'change_frozen_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '冻结积分变动量'" },
+      { name: 'after_frozen_points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '变动后冻结积分'" }
+    ]
+  },
+  {
+    table: 'recharge_orders',
+    columns: [
+      { name: 'points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '到账积分'" }
+    ]
+  },
+  {
+    table: 'sys_task',
+    columns: [
+      { name: 'quota', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '预扣积分'" }
+    ]
+  }
+];
+
+/**
+ * 确保积分相关字段支持 6 位小数
+ */
+async function ensurePointDecimalPrecision(connection) {
+  console.log('[db-init] 检查积分字段小数精度...');
+
+  let changedCount = 0;
+
+  for (const { table, columns } of POINT_DECIMAL_COLUMNS) {
+    for (const column of columns) {
+      const [rows] = await connection.execute(
+        `SELECT NUMERIC_PRECISION AS numericPrecision, NUMERIC_SCALE AS numericScale
+         FROM information_schema.columns
+         WHERE table_schema = DATABASE()
+           AND table_name = ?
+           AND column_name = ?`,
+        [table, column.name]
+      );
+
+      if (rows.length === 0) {
+        continue;
+      }
+
+      const numericPrecision = Number(rows[0].numericPrecision || 0);
+      const numericScale = Number(rows[0].numericScale || 0);
+      if (numericPrecision >= 20 && numericScale >= 6) {
+        continue;
+      }
+
+      await connection.execute(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column.name}\` ${column.definition}`);
+      changedCount++;
+      console.log(`[db-init] 已调整 ${table}.${column.name} 为 DECIMAL(20, 6)`);
+    }
+  }
+
+  if (changedCount === 0) {
+    console.log('[db-init] 积分字段小数精度完整，无需调整');
+  }
+}
+
 /**
  * 初始化系统配置默认数据
  */
@@ -358,11 +435,14 @@ async function initDatabaseSchema() {
     
     await connection.execute(CREATE_BALANCE_FLOW_TABLE_SQL);
     console.log('[db-init] balance_flow 表已就绪');
+
+    // 4. 确保积分字段支持 6 位小数
+    await ensurePointDecimalPrecision(connection);
     
-    // 4. 初始化系统配置默认数据
+    // 5. 初始化系统配置默认数据
     await initSystemConfig(connection);
 
-    // 5. 给历史有效用户补齐积分账户
+    // 6. 给历史有效用户补齐积分账户
     const backfilledCount = await backfillCreditAccounts(connection);
     if (backfilledCount > 0) {
       console.log(`[db-init] 已补齐 ${backfilledCount} 个历史用户积分账户`);
