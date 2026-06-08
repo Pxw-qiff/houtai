@@ -9,12 +9,16 @@ import com.chuamgwei.infrastructure.mapper.SysAuditLogMapper;
 import com.chuamgwei.module.credit.entity.CreditAccount;
 import com.chuamgwei.module.credit.entity.CreditAccountVO;
 import com.chuamgwei.module.credit.entity.CreditBillingResult;
+import com.chuamgwei.module.credit.entity.CreditConsumeRecord;
 import com.chuamgwei.module.credit.entity.CreditFlow;
 import com.chuamgwei.module.credit.mapper.CreditAccountMapper;
+import com.chuamgwei.module.credit.mapper.CreditConsumeRecordMapper;
 import com.chuamgwei.module.credit.mapper.CreditFlowMapper;
 import com.chuamgwei.module.credit.service.CreditService;
+import com.chuamgwei.module.redis.service.CreditBalanceCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +36,7 @@ public class CreditServiceImpl implements CreditService {
 
     private static final int POINT_SCALE = 6;
     private static final int MAX_BIZ_TYPE_LENGTH = 30;
+    private static final int CLIENT_CONSUME_PAGE_SIZE = 20;
     private static final String FLOW_PREFIX = "FLW";
     private static final String OPERATOR_SYSTEM = "system";
     private static final String OPERATOR_NEW_API = "new-api";
@@ -41,11 +46,17 @@ public class CreditServiceImpl implements CreditService {
     private static final String STATUS_PRE_CONSUMED = "PRE_CONSUMED";
     private static final String STATUS_SETTLED = "SETTLED";
     private static final String STATUS_REFUNDED = "REFUNDED";
+    private static final String STATUS_TEXT_PRE_CONSUMED = "结算中";
+    private static final String STATUS_TEXT_SETTLED = "已结算";
+    private static final String STATUS_TEXT_REFUNDED = "已退款";
+    private static final String CONSUME_RECORD_TITLE_NEW_API_CHAT = "AI 对话消费";
     private static final BigDecimal ZERO_POINTS = BigDecimal.ZERO.setScale(POINT_SCALE, RoundingMode.HALF_UP);
 
     private final CreditAccountMapper creditAccountMapper;
     private final CreditFlowMapper creditFlowMapper;
+    private final CreditConsumeRecordMapper creditConsumeRecordMapper;
     private final SysAuditLogMapper sysAuditLogMapper;
+    private final CreditBalanceCacheService creditBalanceCacheService;
 
     @Override
     public CreditAccount getOrCreateAccount(String userUuid) {
@@ -70,7 +81,23 @@ public class CreditServiceImpl implements CreditService {
 
     @Override
     public CreditAccount getBalance(String userUuid) {
-        return getOrCreateAccount(userUuid);
+        // 先查 Redis 缓存
+        BigDecimal cachedBalance = creditBalanceCacheService.getCachedBalance(userUuid);
+        if (cachedBalance != null) {
+            CreditAccount cached = new CreditAccount();
+            cached.setUserUuid(userUuid);
+            cached.setAvailablePoints(cachedBalance);
+            log.debug("命中余额缓存: userUuid={}, availablePoints={}", userUuid, cachedBalance);
+            return cached;
+        }
+
+        // 未命中，查 MySQL
+        CreditAccount account = getOrCreateAccount(userUuid);
+        
+        // 写入 Redis 缓存
+        creditBalanceCacheService.cacheBalance(userUuid, account.getAvailablePoints());
+        
+        return account;
     }
 
     @Override
@@ -122,6 +149,11 @@ public class CreditServiceImpl implements CreditService {
                 beforeFrozen, normalizedPoints, afterFrozen,
                 stageBizType(normalizedBizType, STAGE_PRE), normalizedBizOrderNo,
                 OPERATOR_NEW_API, defaultRemark(remark, "new-api 请求预扣积分"));
+        upsertPreConsumedRecord(account, normalizedBizType, normalizedBizOrderNo, normalizedPoints,
+                beforeAvailable, afterAvailable, defaultRemark(remark, "new-api 请求预扣积分"));
+
+        // 余额变动，删除缓存
+        creditBalanceCacheService.evictBalance(userUuid);
 
         log.info("内部预扣积分成功: userUuid={}, bizType={}, bizOrderNo={}, points={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, normalizedPoints);
@@ -216,6 +248,12 @@ public class CreditServiceImpl implements CreditService {
                 beforeFrozen, frozenChange, afterFrozen,
                 stageBizType(normalizedBizType, STAGE_SETTLE), normalizedBizOrderNo,
                 OPERATOR_NEW_API, defaultRemark(remark, "new-api 请求完成，按实际用量结算"));
+        upsertSettledRecord(account, normalizedBizType, normalizedBizOrderNo, preFlow,
+                preConsumedPoints, normalizedActualPoints, releasePoints, extraConsumePoints,
+                afterAvailable, defaultRemark(remark, "new-api 请求完成，按实际用量结算"));
+
+        // 余额变动，删除缓存
+        creditBalanceCacheService.evictBalance(userUuid);
 
         log.info("内部结算积分成功: userUuid={}, bizType={}, bizOrderNo={}, pre={}, actual={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, preConsumedPoints, normalizedActualPoints);
@@ -289,6 +327,11 @@ public class CreditServiceImpl implements CreditService {
                 beforeFrozen, refundPoints.negate(), afterFrozen,
                 stageBizType(normalizedBizType, STAGE_REFUND), normalizedBizOrderNo,
                 OPERATOR_NEW_API, defaultRemark(remark, "new-api 请求失败，退回预扣积分"));
+        upsertRefundedRecord(account, normalizedBizType, normalizedBizOrderNo, preFlow,
+                refundPoints, afterAvailable, defaultRemark(remark, "new-api 请求失败，退回预扣积分"));
+
+        // 余额变动，删除缓存
+        creditBalanceCacheService.evictBalance(userUuid);
 
         log.info("内部退款积分成功: userUuid={}, bizType={}, bizOrderNo={}, points={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, refundPoints);
@@ -347,6 +390,10 @@ public class CreditServiceImpl implements CreditService {
         account.setAvailablePoints(afterAvailable);
         account.setTotalPoints(afterTotal);
         account.setTotalRechargePoints(afterRecharge);
+        
+        // 余额变动，删除缓存
+        creditBalanceCacheService.evictBalance(userUuid);
+        
         return account;
     }
 
@@ -411,6 +458,9 @@ public class CreditServiceImpl implements CreditService {
         auditLog.setCreateTime(System.currentTimeMillis() / 1000);
         sysAuditLogMapper.insert(auditLog);
 
+        // 余额变动，删除缓存
+        creditBalanceCacheService.evictBalance(userUuid);
+
         log.info("调账完成: 用户={}, 变动前={}, 变动={}, 变动后={}",
                 userUuid, beforeAvailable, changePoints, afterAvailable);
         return true;
@@ -423,6 +473,13 @@ public class CreditServiceImpl implements CreditService {
             return creditAccountMapper.selectAccountPage(page);
         }
         return creditAccountMapper.searchAccountPage(page, keyword);
+    }
+
+    @Override
+    public Page<CreditConsumeRecord> pageConsumeRecords(Integer current, Integer size, String userUuid) {
+        validateUserUuid(userUuid);
+        Page<CreditConsumeRecord> page = new Page<>(normalizeCurrent(current), CLIENT_CONSUME_PAGE_SIZE);
+        return creditConsumeRecordMapper.selectConsumeRecordPage(page, userUuid);
     }
 
     @Override
@@ -524,6 +581,139 @@ public class CreditServiceImpl implements CreditService {
     }
 
     /**
+     * 写入预扣阶段消费记录
+     */
+    private void upsertPreConsumedRecord(CreditAccount account, String bizType, String bizOrderNo,
+                                         BigDecimal preDeductPoints, BigDecimal balanceBefore,
+                                         BigDecimal balanceAfter, String remark) {
+        LocalDateTime now = LocalDateTime.now();
+        CreditConsumeRecord record = newConsumeRecord(account.getUserUuid(), bizType, bizOrderNo, remark);
+        record.setStatus(STATUS_PRE_CONSUMED);
+        record.setStatusText(STATUS_TEXT_PRE_CONSUMED);
+        record.setPreDeductPoints(valueOrZero(preDeductPoints));
+        record.setActualCostPoints(null);
+        record.setRefundPoints(ZERO_POINTS);
+        record.setExtraDeductPoints(ZERO_POINTS);
+        record.setFrozenPoints(valueOrZero(preDeductPoints));
+        record.setBalanceBefore(valueOrZero(balanceBefore));
+        record.setBalanceAfter(valueOrZero(balanceAfter));
+        record.setStartedAt(now);
+        record.setFinishedAt(null);
+        record.setLatestAt(now);
+        upsertConsumeRecord(record);
+    }
+
+    /**
+     * 写入结算阶段消费记录
+     */
+    private void upsertSettledRecord(CreditAccount account, String bizType, String bizOrderNo, CreditFlow preFlow,
+                                     BigDecimal preDeductPoints, BigDecimal actualCostPoints,
+                                     BigDecimal refundPoints, BigDecimal extraDeductPoints,
+                                     BigDecimal balanceAfter, String remark) {
+        LocalDateTime now = LocalDateTime.now();
+        CreditConsumeRecord record = newConsumeRecord(account.getUserUuid(), bizType, bizOrderNo, remark);
+        record.setStatus(STATUS_SETTLED);
+        record.setStatusText(STATUS_TEXT_SETTLED);
+        record.setPreDeductPoints(valueOrZero(preDeductPoints));
+        record.setActualCostPoints(valueOrZero(actualCostPoints));
+        record.setRefundPoints(valueOrZero(refundPoints));
+        record.setExtraDeductPoints(valueOrZero(extraDeductPoints));
+        record.setFrozenPoints(ZERO_POINTS);
+        record.setBalanceBefore(valueOrZero(preFlow.getBeforeAvailablePoints()));
+        record.setBalanceAfter(valueOrZero(balanceAfter));
+        record.setStartedAt(preFlow.getCreatedAt() == null ? now : preFlow.getCreatedAt());
+        record.setFinishedAt(now);
+        record.setLatestAt(now);
+        upsertConsumeRecord(record);
+    }
+
+    /**
+     * 写入退款阶段消费记录
+     */
+    private void upsertRefundedRecord(CreditAccount account, String bizType, String bizOrderNo, CreditFlow preFlow,
+                                      BigDecimal refundPoints, BigDecimal balanceAfter, String remark) {
+        LocalDateTime now = LocalDateTime.now();
+        CreditConsumeRecord record = newConsumeRecord(account.getUserUuid(), bizType, bizOrderNo, remark);
+        record.setStatus(STATUS_REFUNDED);
+        record.setStatusText(STATUS_TEXT_REFUNDED);
+        record.setPreDeductPoints(valueOrZero(refundPoints));
+        record.setActualCostPoints(ZERO_POINTS);
+        record.setRefundPoints(valueOrZero(refundPoints));
+        record.setExtraDeductPoints(ZERO_POINTS);
+        record.setFrozenPoints(ZERO_POINTS);
+        record.setBalanceBefore(valueOrZero(preFlow.getBeforeAvailablePoints()));
+        record.setBalanceAfter(valueOrZero(balanceAfter));
+        record.setStartedAt(preFlow.getCreatedAt() == null ? now : preFlow.getCreatedAt());
+        record.setFinishedAt(now);
+        record.setLatestAt(now);
+        upsertConsumeRecord(record);
+    }
+
+    /**
+     * 创建消费记录基础数据
+     */
+    private CreditConsumeRecord newConsumeRecord(String userUuid, String bizType, String bizOrderNo, String remark) {
+        CreditConsumeRecord record = new CreditConsumeRecord();
+        record.setUserUuid(userUuid);
+        record.setBizType(bizType);
+        record.setBizOrderNo(bizOrderNo);
+        record.setTitle(consumeRecordTitle(bizType));
+        record.setRemark(remark);
+        return record;
+    }
+
+    /**
+     * 幂等写入消费记录读模型
+     */
+    private void upsertConsumeRecord(CreditConsumeRecord record) {
+        int rows = updateConsumeRecord(record);
+        if (rows > 0) {
+            return;
+        }
+        try {
+            creditConsumeRecordMapper.insert(record);
+        } catch (DuplicateKeyException ignored) {
+            updateConsumeRecord(record);
+        }
+    }
+
+    /**
+     * 更新消费记录读模型
+     */
+    private int updateConsumeRecord(CreditConsumeRecord record) {
+        return creditConsumeRecordMapper.update(null,
+                Wrappers.<CreditConsumeRecord>lambdaUpdate()
+                        .set(CreditConsumeRecord::getBizType, record.getBizType())
+                        .set(CreditConsumeRecord::getTitle, record.getTitle())
+                        .set(CreditConsumeRecord::getStatus, record.getStatus())
+                        .set(CreditConsumeRecord::getStatusText, record.getStatusText())
+                        .set(CreditConsumeRecord::getPreDeductPoints, record.getPreDeductPoints())
+                        .set(CreditConsumeRecord::getActualCostPoints, record.getActualCostPoints())
+                        .set(CreditConsumeRecord::getRefundPoints, record.getRefundPoints())
+                        .set(CreditConsumeRecord::getExtraDeductPoints, record.getExtraDeductPoints())
+                        .set(CreditConsumeRecord::getFrozenPoints, record.getFrozenPoints())
+                        .set(CreditConsumeRecord::getBalanceBefore, record.getBalanceBefore())
+                        .set(CreditConsumeRecord::getBalanceAfter, record.getBalanceAfter())
+                        .set(CreditConsumeRecord::getStartedAt, record.getStartedAt())
+                        .set(CreditConsumeRecord::getFinishedAt, record.getFinishedAt())
+                        .set(CreditConsumeRecord::getLatestAt, record.getLatestAt())
+                        .set(CreditConsumeRecord::getRemark, record.getRemark())
+                        .eq(CreditConsumeRecord::getUserUuid, record.getUserUuid())
+                        .eq(CreditConsumeRecord::getBizOrderNo, record.getBizOrderNo())
+        );
+    }
+
+    /**
+     * 生成消费记录展示标题
+     */
+    private String consumeRecordTitle(String bizType) {
+        if ("NEW_API_CHAT".equals(bizType)) {
+            return CONSUME_RECORD_TITLE_NEW_API_CHAT;
+        }
+        return bizType + " 消费";
+    }
+
+    /**
      * 写入积分流水
      */
     private void insertFlow(CreditAccount account,
@@ -621,6 +811,16 @@ public class CreditServiceImpl implements CreditService {
             throw new IllegalArgumentException("业务单号不能为空");
         }
         return bizOrderNo.trim();
+    }
+
+    /**
+     * 标准化分页页码
+     */
+    private long normalizeCurrent(Integer current) {
+        if (current == null || current < 1) {
+            return 1L;
+        }
+        return current.longValue();
     }
 
     /**

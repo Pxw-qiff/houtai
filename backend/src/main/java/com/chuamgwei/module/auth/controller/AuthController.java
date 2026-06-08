@@ -8,10 +8,10 @@ import com.chuamgwei.infrastructure.entity.User;
 import com.chuamgwei.infrastructure.mapper.UserMapper;
 import com.chuamgwei.module.auth.config.AuthProperties;
 import com.chuamgwei.module.auth.service.AuthTokenService;
+import com.chuamgwei.module.redis.service.RedisService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,7 +31,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final StringRedisTemplate stringRedisTemplate;
+    private final RedisService redisService;
     private final UserMapper userMapper;
     private final AuthProperties authProperties;
     private final AuthTokenService authTokenService;
@@ -43,11 +43,10 @@ public class AuthController {
     @PostMapping("/v1/auth/ticket")
     public Result<Map<String, Object>> exchangeTicket(@RequestBody @Valid TicketReq req) {
         String redisKey = authProperties.getTicketPrefix() + req.getTicket().trim();
-        String ticketPayload = stringRedisTemplate.opsForValue().get(redisKey);
+        String ticketPayload = redisService.take(redisKey);
         if (ticketPayload == null || ticketPayload.trim().isEmpty()) {
             throw new RuntimeException("ticket不存在或已过期");
         }
-        stringRedisTemplate.delete(redisKey);
 
         JSONObject ticket = JSONUtil.parseObj(ticketPayload);
         String userUuid = firstNonBlank(
