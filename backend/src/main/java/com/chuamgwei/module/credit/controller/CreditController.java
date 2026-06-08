@@ -5,6 +5,7 @@ import com.chuamgwei.common.RequestContext;
 import com.chuamgwei.common.Result;
 import com.chuamgwei.module.credit.entity.CreditAccount;
 import com.chuamgwei.module.credit.entity.CreditAccountVO;
+import com.chuamgwei.module.credit.entity.CreditConsumeRecord;
 import com.chuamgwei.module.credit.entity.CreditFlow;
 import com.chuamgwei.module.credit.service.CreditService;
 import lombok.Data;
@@ -43,6 +44,23 @@ public class CreditController {
         CreditAccount account = creditService.getBalance(userUuid);
         log.info("查询余额结果: userUuid={}, availablePoints={}", userUuid, account.getAvailablePoints());
         return Result.success(account);
+    }
+
+    /**
+     * 分页查询当前用户消费记录
+     */
+    @GetMapping("/v1/credit/consume-records")
+    public Result<Page<CreditConsumeRecord>> listConsumeRecords(
+            @RequestParam(defaultValue = "1") Integer current,
+            @RequestParam(defaultValue = "10") Integer size) {
+        String userUuid = RequestContext.getOperatorUuid();
+        if (userUuid == null || userUuid.trim().isEmpty()) {
+            throw new RuntimeException("当前用户身份缺失");
+        }
+        log.info("查询当前用户消费记录: current={}, size={}, userUuid={}", current, size, userUuid);
+        Page<CreditConsumeRecord> page = creditService.pageConsumeRecords(current, size, userUuid);
+        log.info("查询当前用户消费记录结果: total={}, records={}", page.getTotal(), page.getRecords().size());
+        return Result.success(page);
     }
 
     /**
