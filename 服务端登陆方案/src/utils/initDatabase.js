@@ -181,6 +181,38 @@ CREATE TABLE IF NOT EXISTS credit_flow (
 `;
 
 /**
+ * 创建 credit_consume_record 用户端消费记录读模型表的 SQL
+ */
+const CREATE_CREDIT_CONSUME_RECORD_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS credit_consume_record (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_uuid VARCHAR(36) NOT NULL COMMENT '用户UUID',
+  biz_type VARCHAR(64) NOT NULL COMMENT '业务类型',
+  biz_order_no VARCHAR(128) NOT NULL COMMENT '业务单号',
+  title VARCHAR(255) DEFAULT NULL COMMENT '展示标题',
+  status VARCHAR(32) NOT NULL DEFAULT 'PROCESSING' COMMENT '结算状态',
+  status_text VARCHAR(64) DEFAULT NULL COMMENT '状态文案',
+  pre_deduct_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '预扣积分',
+  actual_cost_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '实际消费积分',
+  refund_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '返还积分',
+  extra_deduct_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '结算补扣积分',
+  frozen_points DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '当前冻结积分',
+  balance_before DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '业务开始前可用积分',
+  balance_after DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '当前阶段后可用积分',
+  started_at DATETIME DEFAULT NULL COMMENT '开始时间',
+  finished_at DATETIME DEFAULT NULL COMMENT '完成时间',
+  latest_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近更新时间',
+  remark VARCHAR(500) DEFAULT NULL COMMENT '展示备注',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_consume_record_biz (user_uuid, biz_type, biz_order_no),
+  KEY idx_consume_record_user_latest (user_uuid, latest_at, id),
+  KEY idx_consume_record_biz (biz_type, biz_order_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户端消费记录读模型表';
+`;
+
+/**
  * 创建 recharge_orders 充值订单表的 SQL
  */
 const CREATE_RECHARGE_ORDERS_TABLE_SQL = `
@@ -316,6 +348,18 @@ const POINT_DECIMAL_COLUMNS = [
     ]
   },
   {
+    table: 'credit_consume_record',
+    columns: [
+      { name: 'pre_deduct_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '预扣积分'" },
+      { name: 'actual_cost_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '实际消费积分'" },
+      { name: 'refund_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '返还积分'" },
+      { name: 'extra_deduct_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '结算补扣积分'" },
+      { name: 'frozen_points', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '当前冻结积分'" },
+      { name: 'balance_before', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '业务开始前可用积分'" },
+      { name: 'balance_after', definition: "DECIMAL(20, 6) NOT NULL DEFAULT 0.000000 COMMENT '当前阶段后可用积分'" }
+    ]
+  },
+  {
     table: 'recharge_orders',
     columns: [
       { name: 'points', definition: "DECIMAL(20, 6) NOT NULL COMMENT '到账积分'" }
@@ -420,6 +464,9 @@ async function initDatabaseSchema() {
     
     await connection.execute(CREATE_CREDIT_FLOW_TABLE_SQL);
     console.log('[db-init] credit_flow 表已就绪');
+
+    await connection.execute(CREATE_CREDIT_CONSUME_RECORD_TABLE_SQL);
+    console.log('[db-init] credit_consume_record 表已就绪');
     
     await connection.execute(CREATE_RECHARGE_ORDERS_TABLE_SQL);
     console.log('[db-init] recharge_orders 表已就绪');
