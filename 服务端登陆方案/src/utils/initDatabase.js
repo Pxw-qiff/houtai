@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS recharge_orders (
   points DECIMAL(20, 6) NOT NULL COMMENT '到账积分',
   charge_ratio DECIMAL(10, 2) NOT NULL COMMENT '充值比例',
   pay_type VARCHAR(16) NOT NULL COMMENT '支付方式',
-  status VARCHAR(16) NOT NULL COMMENT '订单状态',
+  status VARCHAR(32) NOT NULL COMMENT '订单状态',
   expire_time DATETIME DEFAULT NULL COMMENT '支付过期时间',
   pay_time DATETIME DEFAULT NULL COMMENT '支付成功时间',
   credited_time DATETIME DEFAULT NULL COMMENT '积分入账时间',

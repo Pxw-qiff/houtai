@@ -46,15 +46,7 @@
                 <span class="menu-icon--sub">○</span>
                 <span>充值管理</span>
               </el-menu-item>
-              <el-menu-item index="/recharge/pay-test">
-                <span class="menu-icon--sub">○</span>
-                <span>支付测试</span>
-              </el-menu-item>
             </el-sub-menu>
-            <el-menu-item index="/task/manage">
-              <span class="menu-icon">◆</span>
-              <span>任务管理</span>
-            </el-menu-item>
             <el-menu-item index="/gateway/console">
               <span class="menu-icon">◆</span>
               <span>AI 网关控制台</span>
