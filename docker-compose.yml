@@ -63,7 +63,7 @@ services:
 
   node-login:
     build:
-      context: "https://github.com/Pxw-qiff/houtai.git#main:服务端登陆方案/src"
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:服务端登陆方案/src"
     restart: unless-stopped
     environment:
       PORT: 3100
@@ -89,7 +89,7 @@ services:
 
   backend:
     build:
-      context: "https://github.com/Pxw-qiff/houtai.git#main:backend"
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:backend"
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
@@ -120,7 +120,7 @@ services:
 
   frontend:
     build:
-      context: "https://github.com/Pxw-qiff/houtai.git#main:frontend"
+      context: "https://gitee.com/pxwfff/sanheyi.git#main:frontend"
       args:
         VITE_NEW_API_WEB_URL: ${VITE_NEW_API_WEB_URL:-http://localhost:3000}
     restart: unless-stopped
@@ -133,8 +133,7 @@ services:
       - node-login
 
   new-api:
-    build:
-      context: "https://github.com/Pxw-qiff/new-api.git"
+    image: ghcr.io/pxw-qiff/new-api:custom
     restart: unless-stopped
     command: --log-dir /app/logs
     environment:
