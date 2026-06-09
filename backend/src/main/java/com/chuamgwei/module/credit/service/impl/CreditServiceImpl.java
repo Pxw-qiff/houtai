@@ -11,9 +11,11 @@ import com.chuamgwei.module.credit.entity.CreditAccountVO;
 import com.chuamgwei.module.credit.entity.CreditBillingResult;
 import com.chuamgwei.module.credit.entity.CreditConsumeRecord;
 import com.chuamgwei.module.credit.entity.CreditFlow;
+import com.chuamgwei.module.credit.entity.CreditLogVO;
 import com.chuamgwei.module.credit.mapper.CreditAccountMapper;
 import com.chuamgwei.module.credit.mapper.CreditConsumeRecordMapper;
 import com.chuamgwei.module.credit.mapper.CreditFlowMapper;
+import com.chuamgwei.module.credit.mapper.CreditLogMapper;
 import com.chuamgwei.module.credit.service.CreditService;
 import com.chuamgwei.module.redis.service.CreditBalanceCacheService;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class CreditServiceImpl implements CreditService {
     private static final int POINT_SCALE = 6;
     private static final int MAX_BIZ_TYPE_LENGTH = 30;
     private static final int CLIENT_CONSUME_PAGE_SIZE = 20;
+    private static final int CLIENT_LOG_MAX_PAGE_SIZE = 100;
     private static final String FLOW_PREFIX = "FLW";
     private static final String OPERATOR_SYSTEM = "system";
     private static final String OPERATOR_NEW_API = "new-api";
@@ -55,6 +58,7 @@ public class CreditServiceImpl implements CreditService {
     private final CreditAccountMapper creditAccountMapper;
     private final CreditFlowMapper creditFlowMapper;
     private final CreditConsumeRecordMapper creditConsumeRecordMapper;
+    private final CreditLogMapper creditLogMapper;
     private final SysAuditLogMapper sysAuditLogMapper;
     private final CreditBalanceCacheService creditBalanceCacheService;
 
@@ -480,6 +484,22 @@ public class CreditServiceImpl implements CreditService {
     }
 
     @Override
+    public Page<CreditLogVO> pageUserLogs(Integer current, Integer size, String userUuid, String type,
+                                          String direction, String keyword, String startTime, String endTime) {
+        validateUserUuid(userUuid);
+        Page<CreditLogVO> page = new Page<>(normalizeCurrent(current), normalizeLogPageSize(size));
+        return creditLogMapper.selectUserLogPage(
+                page,
+                userUuid,
+                normalizeCreditLogType(type),
+                normalizeCreditLogDirection(direction),
+                normalizeOptionalText(keyword),
+                normalizeOptionalText(startTime),
+                normalizeOptionalText(endTime)
+        );
+    }
+
+    @Override
     public Page<CreditFlow> pageFlows(Integer current, Integer size, String userUuid, String bizType) {
         Page<CreditFlow> page = new Page<>(current, size);
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CreditFlow> wrapper =
@@ -818,6 +838,60 @@ public class CreditServiceImpl implements CreditService {
             return 1L;
         }
         return current.longValue();
+    }
+
+    /**
+     * 标准化用户端积分日志分页大小
+     */
+    private long normalizeLogPageSize(Integer size) {
+        if (size == null || size < 1) {
+            return CLIENT_CONSUME_PAGE_SIZE;
+        }
+        return Math.min(size.longValue(), CLIENT_LOG_MAX_PAGE_SIZE);
+    }
+
+    /**
+     * 标准化用户端积分日志类型
+     */
+    private String normalizeCreditLogType(String type) {
+        String normalized = normalizeOptionalUpperText(type);
+        if (normalized == null) {
+            return null;
+        }
+        if ("RECHARGE".equals(normalized) || "CONSUME".equals(normalized)
+                || "REFUND".equals(normalized) || "ADJUST".equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("不支持的积分日志类型");
+    }
+
+    /**
+     * 标准化用户端积分日志方向
+     */
+    private String normalizeCreditLogDirection(String direction) {
+        String normalized = normalizeOptionalUpperText(direction);
+        if (normalized == null) {
+            return null;
+        }
+        if ("IN".equals(normalized) || "OUT".equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("不支持的积分日志方向");
+    }
+
+    /**
+     * 标准化可选文本
+     */
+    private String normalizeOptionalText(String value) {
+        return StrUtil.isBlank(value) ? null : value.trim();
+    }
+
+    /**
+     * 标准化可选大写文本
+     */
+    private String normalizeOptionalUpperText(String value) {
+        String normalized = normalizeOptionalText(value);
+        return normalized == null ? null : normalized.toUpperCase();
     }
 
     /**

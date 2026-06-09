@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chuamgwei.module.credit.mapper.CreditLogMapper">
+
+    <select id="selectUserLogPage" resultType="com.chuamgwei.module.credit.entity.CreditLogVO">
+        SELECT
+            logs.log_id,
+            logs.user_uuid,
+            logs.type,
+            logs.type_text,
+            logs.direction,
+            logs.amount,
+            logs.title,
+            logs.status,
+            logs.status_text,
+            logs.biz_type,
+            logs.biz_order_no,
+            logs.balance_before,
+            logs.balance_after,
+            logs.operator_name,
+            logs.remark,
+            logs.created_at
+        FROM (
+            SELECT
+                CONCAT('consume_', id) AS log_id,
+                user_uuid,
+                CASE
+                    WHEN status = 'REFUNDED' THEN 'REFUND'
+                    ELSE 'CONSUME'
+                END AS type,
+                CASE
+                    WHEN status = 'REFUNDED' THEN 'AI 退款'
+                    ELSE 'AI 消费'
+                END AS type_text,
+                CASE
+                    WHEN status = 'REFUNDED' THEN 'IN'
+                    ELSE 'OUT'
+                END AS direction,
+                CASE
+                    WHEN status = 'REFUNDED' THEN refund_points
+                    WHEN actual_cost_points IS NULL THEN pre_deduct_points
+                    ELSE actual_cost_points
+                END AS amount,
+                title,
+                status,
+                status_text,
+                biz_type,
+                biz_order_no,
+                balance_before,
+                balance_after,
+                'new-api' AS operator_name,
+                remark,
+                COALESCE(latest_at, created_at) AS created_at
+            FROM credit_consume_record
+            WHERE user_uuid = #{userUuid}
+
+            UNION ALL
+
+            SELECT
+                CONCAT('flow_', id) AS log_id,
+                user_uuid,
+                CASE
+                    WHEN biz_type = 'RECHARGE' THEN 'RECHARGE'
+                    ELSE 'ADJUST'
+                END AS type,
+                CASE
+                    WHEN biz_type = 'RECHARGE' THEN '充值'
+                    WHEN biz_type = 'ADMIN_ADD' THEN '管理员加积分'
+                    WHEN biz_type = 'ADMIN_DEDUCT' THEN '管理员扣积分'
+                    ELSE '积分调账'
+                END AS type_text,
+                CASE
+                    WHEN change_available_points &gt;= 0 THEN 'IN'
+                    ELSE 'OUT'
+                END AS direction,
+                ABS(change_available_points) AS amount,
+                CASE
+                    WHEN biz_type = 'RECHARGE' THEN '积分充值'
+                    WHEN biz_type = 'ADMIN_ADD' THEN '管理员加积分'
+                    WHEN biz_type = 'ADMIN_DEDUCT' THEN '管理员扣积分'
+                    ELSE '积分调账'
+                END AS title,
+                'SUCCESS' AS status,
+                '已完成' AS status_text,
+                biz_type,
+                biz_order_no,
+                before_available_points AS balance_before,
+                after_available_points AS balance_after,
+                operator_name,
+                remark,
+                created_at
+            FROM credit_flow
+            WHERE user_uuid = #{userUuid}
+              AND biz_type IN ('RECHARGE', 'ADMIN_ADD', 'ADMIN_DEDUCT')
+        ) logs
+        WHERE 1 = 1
+        <if test="type != null and type != ''">
+            AND logs.type = #{type}
+        </if>
+        <if test="direction != null and direction != ''">
+            AND logs.direction = #{direction}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (
+                logs.biz_order_no LIKE CONCAT('%', #{keyword}, '%')
+                OR logs.title LIKE CONCAT('%', #{keyword}, '%')
+                OR logs.remark LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND logs.created_at &gt;= #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND logs.created_at &lt;= #{endTime}
+        </if>
+        ORDER BY logs.created_at DESC, logs.log_id DESC
+    </select>
+
+</mapper>

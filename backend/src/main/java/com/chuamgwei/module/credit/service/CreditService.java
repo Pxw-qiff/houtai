@@ -6,6 +6,7 @@ import com.chuamgwei.module.credit.entity.CreditAccountVO;
 import com.chuamgwei.module.credit.entity.CreditBillingResult;
 import com.chuamgwei.module.credit.entity.CreditConsumeRecord;
 import com.chuamgwei.module.credit.entity.CreditFlow;
+import com.chuamgwei.module.credit.entity.CreditLogVO;
 
 import java.math.BigDecimal;
 
@@ -61,6 +62,12 @@ public interface CreditService {
      * 分页查询用户端消费记录
      */
     Page<CreditConsumeRecord> pageConsumeRecords(Integer current, Integer size, String userUuid);
+
+    /**
+     * 分页查询用户端统一积分日志
+     */
+    Page<CreditLogVO> pageUserLogs(Integer current, Integer size, String userUuid, String type,
+                                   String direction, String keyword, String startTime, String endTime);
 
     /**
      * 分页查询积分流水（支持按用户UUID、业务类型筛选）

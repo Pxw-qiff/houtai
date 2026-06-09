@@ -7,6 +7,7 @@ import com.chuamgwei.module.credit.entity.CreditAccount;
 import com.chuamgwei.module.credit.entity.CreditAccountVO;
 import com.chuamgwei.module.credit.entity.CreditConsumeRecord;
 import com.chuamgwei.module.credit.entity.CreditFlow;
+import com.chuamgwei.module.credit.entity.CreditLogVO;
 import com.chuamgwei.module.credit.service.CreditService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,30 @@ public class CreditController {
         log.info("查询当前用户消费记录: current={}, size={}, userUuid={}", current, size, userUuid);
         Page<CreditConsumeRecord> page = creditService.pageConsumeRecords(current, size, userUuid);
         log.info("查询当前用户消费记录结果: total={}, records={}", page.getTotal(), page.getRecords().size());
+        return Result.success(page);
+    }
+
+    /**
+     * 分页查询当前用户统一积分日志
+     */
+    @GetMapping({"/v1/credit/logs", "/v1/credit/flows"})
+    public Result<Page<CreditLogVO>> listUserLogs(
+            @RequestParam(defaultValue = "1") Integer current,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String direction,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime) {
+        String userUuid = RequestContext.getOperatorUuid();
+        if (userUuid == null || userUuid.trim().isEmpty()) {
+            throw new RuntimeException("当前用户身份缺失");
+        }
+        log.info("查询当前用户统一积分日志: current={}, size={}, type={}, direction={}, userUuid={}",
+                current, size, type, direction, userUuid);
+        Page<CreditLogVO> page = creditService.pageUserLogs(
+                current, size, userUuid, type, direction, keyword, startTime, endTime);
+        log.info("查询当前用户统一积分日志结果: total={}, records={}", page.getTotal(), page.getRecords().size());
         return Result.success(page);
     }
 
