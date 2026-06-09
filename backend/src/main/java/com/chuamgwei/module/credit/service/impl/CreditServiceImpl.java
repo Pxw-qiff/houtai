@@ -18,6 +18,8 @@ import com.chuamgwei.module.credit.mapper.CreditFlowMapper;
 import com.chuamgwei.module.credit.mapper.CreditLogMapper;
 import com.chuamgwei.module.credit.service.CreditService;
 import com.chuamgwei.module.redis.service.CreditBalanceCacheService;
+import com.chuamgwei.module.redis.service.CreditLogCacheService;
+import com.chuamgwei.module.redis.service.CreditReadCacheInvalidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -61,6 +63,8 @@ public class CreditServiceImpl implements CreditService {
     private final CreditLogMapper creditLogMapper;
     private final SysAuditLogMapper sysAuditLogMapper;
     private final CreditBalanceCacheService creditBalanceCacheService;
+    private final CreditLogCacheService creditLogCacheService;
+    private final CreditReadCacheInvalidationService creditReadCacheInvalidationService;
 
     @Override
     public CreditAccount getOrCreateAccount(String userUuid) {
@@ -153,8 +157,8 @@ public class CreditServiceImpl implements CreditService {
         upsertPreConsumedRecord(account, normalizedBizType, normalizedBizOrderNo, normalizedPoints,
                 beforeAvailable, afterAvailable, defaultRemark(remark, "new-api 请求预扣积分"));
 
-        // 余额变动，删除缓存
-        creditBalanceCacheService.evictBalance(userUuid);
+        // 账务变动，事务提交后失效读缓存
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
 
         log.info("内部预扣积分成功: userUuid={}, bizType={}, bizOrderNo={}, points={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, normalizedPoints);
@@ -253,8 +257,8 @@ public class CreditServiceImpl implements CreditService {
                 preConsumedPoints, normalizedActualPoints, releasePoints, extraConsumePoints,
                 afterAvailable, defaultRemark(remark, "new-api 请求完成，按实际用量结算"));
 
-        // 余额变动，删除缓存
-        creditBalanceCacheService.evictBalance(userUuid);
+        // 账务变动，事务提交后失效读缓存
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
 
         log.info("内部结算积分成功: userUuid={}, bizType={}, bizOrderNo={}, pre={}, actual={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, preConsumedPoints, normalizedActualPoints);
@@ -331,8 +335,8 @@ public class CreditServiceImpl implements CreditService {
         upsertRefundedRecord(account, normalizedBizType, normalizedBizOrderNo, preFlow,
                 refundPoints, afterAvailable, defaultRemark(remark, "new-api 请求失败，退回预扣积分"));
 
-        // 余额变动，删除缓存
-        creditBalanceCacheService.evictBalance(userUuid);
+        // 账务变动，事务提交后失效读缓存
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
 
         log.info("内部退款积分成功: userUuid={}, bizType={}, bizOrderNo={}, points={}",
                 userUuid, normalizedBizType, normalizedBizOrderNo, refundPoints);
@@ -392,8 +396,8 @@ public class CreditServiceImpl implements CreditService {
         account.setTotalPoints(afterTotal);
         account.setTotalRechargePoints(afterRecharge);
         
-        // 余额变动，删除缓存
-        creditBalanceCacheService.evictBalance(userUuid);
+        // 账务变动，事务提交后失效读缓存
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
         
         return account;
     }
@@ -459,8 +463,8 @@ public class CreditServiceImpl implements CreditService {
         auditLog.setCreateTime(System.currentTimeMillis() / 1000);
         sysAuditLogMapper.insert(auditLog);
 
-        // 余额变动，删除缓存
-        creditBalanceCacheService.evictBalance(userUuid);
+        // 账务变动，事务提交后失效读缓存
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
 
         log.info("调账完成: 用户={}, 变动前={}, 变动={}, 变动后={}",
                 userUuid, beforeAvailable, changePoints, afterAvailable);
@@ -479,35 +483,70 @@ public class CreditServiceImpl implements CreditService {
     @Override
     public Page<CreditConsumeRecord> pageConsumeRecords(Integer current, Integer size, String userUuid) {
         validateUserUuid(userUuid);
-        Page<CreditConsumeRecord> page = new Page<>(normalizeCurrent(current), CLIENT_CONSUME_PAGE_SIZE);
-        return creditConsumeRecordMapper.selectConsumeRecordPage(page, userUuid);
+        long normalizedCurrent = normalizeCurrent(current);
+        long normalizedSize = CLIENT_CONSUME_PAGE_SIZE;
+        Page<CreditConsumeRecord> cachedPage = creditLogCacheService.getCachedConsumeRecords(userUuid, normalizedCurrent, normalizedSize);
+        if (cachedPage != null) {
+            return cachedPage;
+        }
+        Page<CreditConsumeRecord> page = new Page<>(normalizedCurrent, normalizedSize);
+        Page<CreditConsumeRecord> result = creditConsumeRecordMapper.selectConsumeRecordPage(page, userUuid);
+        creditLogCacheService.cacheConsumeRecords(userUuid, normalizedCurrent, normalizedSize, result);
+        return result;
     }
 
     @Override
     public Page<CreditLogVO> pageUserLogs(Integer current, Integer size, String userUuid, String type,
                                           String direction, String keyword, String startTime, String endTime) {
         validateUserUuid(userUuid);
-        Page<CreditLogVO> page = new Page<>(normalizeCurrent(current), normalizeLogPageSize(size));
-        return creditLogMapper.selectUserLogPage(
+        long normalizedCurrent = normalizeCurrent(current);
+        long normalizedSize = normalizeLogPageSize(size);
+        String normalizedType = normalizeCreditLogType(type);
+        String normalizedDirection = normalizeCreditLogDirection(direction);
+        String normalizedKeyword = normalizeOptionalText(keyword);
+        String normalizedStartTime = normalizeOptionalText(startTime);
+        String normalizedEndTime = normalizeOptionalText(endTime);
+        Page<CreditLogVO> cachedPage = creditLogCacheService.getCachedUserLogs(
+                userUuid, normalizedCurrent, normalizedSize, normalizedType, normalizedDirection,
+                normalizedKeyword, normalizedStartTime, normalizedEndTime);
+        if (cachedPage != null) {
+            return cachedPage;
+        }
+        Page<CreditLogVO> page = new Page<>(normalizedCurrent, normalizedSize);
+        Page<CreditLogVO> result = creditLogMapper.selectUserLogPage(
                 page,
                 userUuid,
-                normalizeCreditLogType(type),
-                normalizeCreditLogDirection(direction),
-                normalizeOptionalText(keyword),
-                normalizeOptionalText(startTime),
-                normalizeOptionalText(endTime)
+                normalizedType,
+                normalizedDirection,
+                normalizedKeyword,
+                normalizedStartTime,
+                normalizedEndTime
         );
+        creditLogCacheService.cacheUserLogs(userUuid, normalizedCurrent, normalizedSize, normalizedType, normalizedDirection,
+                normalizedKeyword, normalizedStartTime, normalizedEndTime, result);
+        return result;
     }
 
     @Override
     public Page<CreditFlow> pageFlows(Integer current, Integer size, String userUuid, String bizType) {
-        Page<CreditFlow> page = new Page<>(current, size);
+        long normalizedCurrent = normalizeCurrent(current);
+        long normalizedSize = normalizeLogPageSize(size);
+        String normalizedUserUuid = normalizeOptionalText(userUuid);
+        String normalizedBizType = normalizeOptionalText(bizType);
+        Page<CreditFlow> cachedPage = creditLogCacheService.getCachedFlows(
+                normalizedCurrent, normalizedSize, normalizedUserUuid, normalizedBizType);
+        if (cachedPage != null) {
+            return cachedPage;
+        }
+        Page<CreditFlow> page = new Page<>(normalizedCurrent, normalizedSize);
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CreditFlow> wrapper =
                 Wrappers.<CreditFlow>lambdaQuery()
-                        .eq(StrUtil.isNotBlank(userUuid), CreditFlow::getUserUuid, userUuid)
-                        .eq(StrUtil.isNotBlank(bizType), CreditFlow::getBizType, bizType)
+                        .eq(StrUtil.isNotBlank(normalizedUserUuid), CreditFlow::getUserUuid, normalizedUserUuid)
+                        .eq(StrUtil.isNotBlank(normalizedBizType), CreditFlow::getBizType, normalizedBizType)
                         .orderByDesc(CreditFlow::getCreatedAt);
-        return creditFlowMapper.selectPage(page, wrapper);
+        Page<CreditFlow> result = creditFlowMapper.selectPage(page, wrapper);
+        creditLogCacheService.cacheFlows(normalizedCurrent, normalizedSize, normalizedUserUuid, normalizedBizType, result);
+        return result;
     }
 
     /**

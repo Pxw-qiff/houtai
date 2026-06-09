@@ -10,6 +10,7 @@ import com.chuamgwei.module.credit.entity.CreditAccount;
 import com.chuamgwei.module.credit.entity.CreditFlow;
 import com.chuamgwei.module.credit.mapper.CreditAccountMapper;
 import com.chuamgwei.module.credit.mapper.CreditFlowMapper;
+import com.chuamgwei.module.redis.service.CreditReadCacheInvalidationService;
 import com.chuamgwei.module.task.entity.SysTask;
 import com.chuamgwei.module.task.mapper.SysTaskMapper;
 import com.chuamgwei.module.task.service.TaskService;
@@ -40,6 +41,7 @@ public class TaskServiceImpl implements TaskService {
     private final CreditAccountMapper creditAccountMapper;
     private final CreditFlowMapper creditFlowMapper;
     private final SysConfigMapper sysConfigMapper;
+    private final CreditReadCacheInvalidationService creditReadCacheInvalidationService;
 
     private final Random random = new Random();
 
@@ -218,6 +220,7 @@ public class TaskServiceImpl implements TaskService {
         flow.setRemark(remark);
         flow.setCreatedAt(LocalDateTime.now());
         creditFlowMapper.insert(flow);
+        creditReadCacheInvalidationService.evictAfterCommit(userUuid);
     }
 
     /**
@@ -330,6 +333,7 @@ public class TaskServiceImpl implements TaskService {
         unfreezeFlow.setRemark("任务解冻");
         unfreezeFlow.setCreatedAt(LocalDateTime.now());
         creditFlowMapper.insert(unfreezeFlow);
+        creditReadCacheInvalidationService.evictAfterCommit(task.getUserUuid());
 
         log.info("异步任务生成成功，扣费入账完成. 任务ID: {} 用户: {} 冻结扣除: {}",
                 task.getTaskId(), task.getUserUuid(), amount);
@@ -404,6 +408,7 @@ public class TaskServiceImpl implements TaskService {
         unfreezeFlow.setRemark("任务解冻");
         unfreezeFlow.setCreatedAt(LocalDateTime.now());
         creditFlowMapper.insert(unfreezeFlow);
+        creditReadCacheInvalidationService.evictAfterCommit(task.getUserUuid());
 
         log.warn("异步任务生成失败，积分已原路退回. 任务ID: {}, 用户: {}, 退回: {}, 变动前可用: {}, 变动后可用: {}",
                 task.getTaskId(), task.getUserUuid(), amount, beforeAvailable, afterAvailable);
